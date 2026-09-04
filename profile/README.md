@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="../assets/hispark-logo.png" alt="HiSpark" width="240">
-</p>
-
 # HiSpark
 
 HiSpark 是由海思技术有限公司主导的开源开发者社区，为开发者提供 SDK、工具链、开发环境、文档与解决方案，与广大开发者共建万物互联的智能世界。
