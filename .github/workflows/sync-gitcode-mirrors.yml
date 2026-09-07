@@ -37,10 +37,16 @@ jobs:
 
           curl --fail --silent --show-error --location --retry 4 \
             'https://gitcode.com/api/v5/orgs/HiSpark/repos?type=public&page=1&per_page=100' \
-            | jq -r '.[].path | select(. != "hi_aiot_solution_vendor")' \
+            | jq -r '.[].path | select(. != "hi_aiot_solution" and . != "hi_aiot_solution_vendor")' \
             | LC_ALL=C sort -u > "${gitcode_repositories}"
           gh api orgs/HiSpark/repos --paginate --jq '.[].name' \
             | LC_ALL=C sort -u > "${github_repositories}"
+
+          {
+            echo '### Repositories excluded by GitHub file limits'
+            echo '- `hi_aiot_solution`: GitCode `master` contains a 174.98 MB regular Git blob.'
+            echo '- `hi_aiot_solution_vendor`: GitCode contains regular Git blobs above 100 MB.'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ -n "${REQUESTED_REPOSITORY}" ]]; then
             grep -Fxq "${REQUESTED_REPOSITORY}" "${gitcode_repositories}"

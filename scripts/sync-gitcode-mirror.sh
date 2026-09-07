@@ -21,10 +21,12 @@ retry() {
   done
 }
 
-if [[ "${repository}" == "hi_aiot_solution_vendor" ]]; then
-  echo "Skipping ${repository}: GitHub rejected files above the normal push limit."
-  exit 0
-fi
+case "${repository}" in
+  hi_aiot_solution|hi_aiot_solution_vendor)
+    echo "Skipping ${repository}: GitCode contains regular Git blobs above GitHub's 100 MB file limit."
+    exit 0
+    ;;
+esac
 
 source_url="https://gitcode.com/HiSpark/${repository}.git"
 target_url="https://github.com/${owner}/${repository}.git"
