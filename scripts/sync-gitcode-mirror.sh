@@ -81,17 +81,24 @@ retry git -C "${work_dir}" -c http.version=HTTP/1.1 fetch --force --prune --no-t
   '+refs/tags/*:refs/tags/*'
 
 has_lfs=false
+mapfile -t source_commits < <(
+  git -C "${work_dir}" for-each-ref --format='%(objectname)' refs/heads refs/tags \
+    | LC_ALL=C sort -u
+)
 while IFS= read -r commit; do
   if git -C "${work_dir}" show "${commit}:.gitattributes" 2>/dev/null | grep -q 'filter=lfs'; then
     has_lfs=true
     break
   fi
-done < <(git -C "${work_dir}" for-each-ref --format='%(objectname)' refs/heads refs/tags)
+done < <(printf '%s\n' "${source_commits[@]}")
 
 if [[ "${has_lfs}" == true ]]; then
   git -C "${work_dir}" lfs install --local
-  retry git -C "${work_dir}" lfs fetch --all source
-  retry git -C "${work_dir}" lfs push --all github
+  # Restrict LFS scans to GitCode refs. The GitHub preservation refs are a
+  # partial clone and intentionally omit blobs, so scanning every local ref
+  # makes Git LFS report "Could not scan for Git LFS files".
+  retry git -C "${work_dir}" lfs fetch source "${source_commits[@]}"
+  retry git -C "${work_dir}" lfs push github "${source_commits[@]}"
 fi
 
 retry git -C "${work_dir}" -c http.version=HTTP/1.1 push --force github \
