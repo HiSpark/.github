@@ -4,6 +4,23 @@ set -euo pipefail
 repository="${1:?repository name is required}"
 owner="${GITHUB_OWNER:-HiSpark}"
 
+retry() {
+  local attempt=1
+  local max_attempts=4
+  local delay=10
+
+  until "$@"; do
+    if (( attempt >= max_attempts )); then
+      echo "Command failed after ${max_attempts} attempts: $*" >&2
+      return 1
+    fi
+    echo "Command failed; retrying in ${delay}s (attempt $((attempt + 1))/${max_attempts}): $*" >&2
+    sleep "${delay}"
+    attempt=$((attempt + 1))
+    delay=$((delay * 2))
+  done
+}
+
 if [[ "${repository}" == "hi_aiot_solution_vendor" ]]; then
   echo "Skipping ${repository}: GitHub rejected files above the normal push limit."
   exit 0
@@ -18,7 +35,7 @@ target_refs="${work_dir}.target-refs"
 rm -rf "${work_dir}" "${source_refs}" "${target_refs}"
 trap 'rm -rf "${work_dir}" "${source_refs}" "${target_refs}"' EXIT
 
-git ls-remote --heads --tags "${source_url}" \
+retry git -c http.version=HTTP/1.1 ls-remote --heads --tags "${source_url}" \
   | awk '$2 !~ /\^\{\}$/ {print}' \
   | LC_ALL=C sort > "${source_refs}"
 
@@ -32,7 +49,7 @@ if ! gh api "repos/${owner}/${repository}" >/dev/null 2>&1; then
   exit 1
 fi
 
-git ls-remote --heads --tags "${target_url}" \
+retry git -c http.version=HTTP/1.1 ls-remote --heads --tags "${target_url}" \
   | awk '$2 !~ /\^\{\}$/ {print}' \
   | LC_ALL=C sort > "${target_refs}"
 
@@ -55,11 +72,11 @@ git init --bare "${work_dir}"
 git -C "${work_dir}" remote add source "${source_url}"
 git -C "${work_dir}" remote add github "${target_url}"
 
-git -C "${work_dir}" fetch --force --no-tags --filter=blob:none github \
+retry git -C "${work_dir}" -c http.version=HTTP/1.1 fetch --force --no-tags --filter=blob:none github \
   '+refs/heads/*:refs/mirror/github/heads/*' \
   '+refs/tags/*:refs/mirror/github/tags/*'
 
-git -C "${work_dir}" fetch --force --prune --no-tags source \
+retry git -C "${work_dir}" -c http.version=HTTP/1.1 fetch --force --prune --no-tags source \
   '+refs/heads/*:refs/heads/*' \
   '+refs/tags/*:refs/tags/*'
 
@@ -73,15 +90,15 @@ done < <(git -C "${work_dir}" for-each-ref --format='%(objectname)' refs/heads r
 
 if [[ "${has_lfs}" == true ]]; then
   git -C "${work_dir}" lfs install --local
-  git -C "${work_dir}" lfs fetch --all source
-  git -C "${work_dir}" lfs push --all github
+  retry git -C "${work_dir}" lfs fetch --all source
+  retry git -C "${work_dir}" lfs push --all github
 fi
 
-git -C "${work_dir}" push --force github \
+retry git -C "${work_dir}" -c http.version=HTTP/1.1 push --force github \
   'refs/heads/*:refs/heads/*' \
   'refs/tags/*:refs/tags/*'
 
-git ls-remote --heads --tags "${target_url}" \
+retry git -c http.version=HTTP/1.1 ls-remote --heads --tags "${target_url}" \
   | awk '$2 !~ /\^\{\}$/ {print}' \
   | LC_ALL=C sort > "${target_refs}"
 
