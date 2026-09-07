@@ -1,0 +1,90 @@
+name: Sync GitCode mirrors
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Optional single GitCode repository name"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitcode-mirror-sync
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.repositories.outputs.matrix }}
+    steps:
+      - name: Build repository matrix
+        id: repositories
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_REPOSITORY: ${{ inputs.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gitcode_repositories="$(mktemp)"
+          github_repositories="$(mktemp)"
+          trap 'rm -f "${gitcode_repositories}" "${github_repositories}"' EXIT
+
+          curl --fail --silent --show-error --location --retry 4 \
+            'https://gitcode.com/api/v5/orgs/HiSpark/repos?type=public&page=1&per_page=100' \
+            | jq -r '.[].path | select(. != "hi_aiot_solution_vendor")' \
+            | LC_ALL=C sort -u > "${gitcode_repositories}"
+          gh api orgs/HiSpark/repos --paginate --jq '.[].name' \
+            | LC_ALL=C sort -u > "${github_repositories}"
+
+          if [[ -n "${REQUESTED_REPOSITORY}" ]]; then
+            grep -Fxq "${REQUESTED_REPOSITORY}" "${gitcode_repositories}"
+            grep -Fxq "${REQUESTED_REPOSITORY}" "${github_repositories}"
+            repositories="$(jq -cn --arg repository "${REQUESTED_REPOSITORY}" '{repository: [$repository]}')"
+          else
+            mapfile -t synchronized < <(comm -12 "${gitcode_repositories}" "${github_repositories}")
+            repositories="$(printf '%s\n' "${synchronized[@]}" | jq -R . | jq -sc '{repository: .}')"
+
+            missing="$(comm -23 "${gitcode_repositories}" "${github_repositories}" || true)"
+            if [[ -n "${missing}" ]]; then
+              {
+                echo '### GitCode repositories missing on GitHub'
+                echo 'Create these repositories manually before the next run:'
+                while IFS= read -r repository; do echo "- \`${repository}\`"; done <<< "${missing}"
+              } >> "${GITHUB_STEP_SUMMARY}"
+            fi
+          fi
+          echo "matrix=${repositories}" >> "${GITHUB_OUTPUT}"
+
+  sync:
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Check out sync implementation
+        uses: actions/checkout@v4
+
+      - name: Create repository-scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.HISPARK_MIRROR_APP_ID }}
+          private-key: ${{ secrets.HISPARK_MIRROR_APP_PRIVATE_KEY }}
+          owner: HiSpark
+          repositories: ${{ matrix.repository }}
+
+      - name: Synchronize ${{ matrix.repository }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_OWNER: HiSpark
+        shell: bash
+        run: scripts/sync-gitcode-mirror.sh "${{ matrix.repository }}"
