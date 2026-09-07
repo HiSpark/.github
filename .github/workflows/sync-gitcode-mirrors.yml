@@ -77,11 +77,11 @@ jobs:
       matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     steps:
       - name: Check out sync implementation
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create repository-scoped GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.HISPARK_MIRROR_APP_ID }}
           private-key: ${{ secrets.HISPARK_MIRROR_APP_PRIVATE_KEY }}
