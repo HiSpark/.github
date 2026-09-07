@@ -72,13 +72,13 @@ git init --bare "${work_dir}"
 git -C "${work_dir}" remote add source "${source_url}"
 git -C "${work_dir}" remote add github "${target_url}"
 
-retry git -C "${work_dir}" -c http.version=HTTP/1.1 fetch --force --no-tags --filter=blob:none github \
-  '+refs/heads/*:refs/mirror/github/heads/*' \
-  '+refs/tags/*:refs/mirror/github/tags/*'
-
 retry git -C "${work_dir}" -c http.version=HTTP/1.1 fetch --force --prune --no-tags source \
   '+refs/heads/*:refs/heads/*' \
   '+refs/tags/*:refs/tags/*'
+
+retry git -C "${work_dir}" -c http.version=HTTP/1.1 fetch --force --no-tags --filter=blob:none github \
+  '+refs/heads/*:refs/mirror/github/heads/*' \
+  '+refs/tags/*:refs/mirror/github/tags/*'
 
 has_lfs=false
 mapfile -t source_commits < <(
