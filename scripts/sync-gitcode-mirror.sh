@@ -51,6 +51,7 @@ if ! gh api "repos/${owner}/${repository}" >/dev/null 2>&1; then
   exit 1
 fi
 
+gh auth setup-git
 retry git -c http.version=HTTP/1.1 ls-remote --heads --tags "${target_url}" \
   | awk '$2 !~ /\^\{\}$/ {print}' \
   | LC_ALL=C sort > "${target_refs}"
@@ -69,7 +70,6 @@ if [[ "${needs_sync}" == false ]]; then
   exit 0
 fi
 
-gh auth setup-git
 git init --bare "${work_dir}"
 git -C "${work_dir}" remote add source "${source_url}"
 git -C "${work_dir}" remote add github "${target_url}"
