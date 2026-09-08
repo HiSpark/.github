@@ -35,7 +35,7 @@ source_refs="${work_dir}.source-refs"
 target_refs="${work_dir}.target-refs"
 
 rm -rf "${work_dir}" "${source_refs}" "${target_refs}"
-trap 'rm -rf "${work_dir}" "${source_refs}" "${target_refs}"' EXIT
+trap 'git config --global --unset-all http.https://github.com/.extraheader >/dev/null 2>&1 || true; rm -rf "${work_dir}" "${source_refs}" "${target_refs}"' EXIT
 
 retry git -c http.version=HTTP/1.1 ls-remote --heads --tags "${source_url}" \
   | awk '$2 !~ /\^\{\}$/ {print}' \
@@ -51,7 +51,9 @@ if ! gh api "repos/${owner}/${repository}" >/dev/null 2>&1; then
   exit 1
 fi
 
-gh auth setup-git
+github_auth_header="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\n')"
+git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic ${github_auth_header}"
+unset github_auth_header
 retry git -c http.version=HTTP/1.1 ls-remote --heads --tags "${target_url}" \
   | awk '$2 !~ /\^\{\}$/ {print}' \
   | LC_ALL=C sort > "${target_refs}"
