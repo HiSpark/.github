@@ -86,6 +86,8 @@ jobs:
     steps:
       - name: Check out sync implementation
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Create repository-scoped GitHub App token
         id: app-token
