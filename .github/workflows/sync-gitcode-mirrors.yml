@@ -23,10 +23,18 @@ jobs:
     outputs:
       matrix: ${{ steps.repositories.outputs.matrix }}
     steps:
+      - name: Create GitHub App token for repository discovery
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.HISPARK_MIRROR_APP_ID }}
+          private-key: ${{ secrets.HISPARK_MIRROR_APP_PRIVATE_KEY }}
+          owner: HiSpark
+
       - name: Build repository matrix
         id: repositories
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REQUESTED_REPOSITORY: ${{ inputs.repository }}
         shell: bash
         run: |
